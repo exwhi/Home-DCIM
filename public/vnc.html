@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VNC 远程 - HomeDCIM</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@novnc/novnc/app/styles/base.css" />
+  <style>
+    #vnc-controls { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    #vnc-controls input { padding: 8px; border-radius: 6px; border: 1px solid rgba(15,23,42,0.06); background: #f8fafc; }
+    #vnc-controls input[type="text"], #vnc-controls input[type="number"] { width: 140px; }
+    #vnc-viewer { border-radius: 10px; overflow: hidden; box-shadow: 0 6px 18px rgba(15,23,42,0.06); }
+    #canvas { width: 100%; height: auto; }
+    .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; background: #f1f5f9; color: var(--muted); }
+    .status-badge.active { background: #d1fae5; color: #065f46; }
+    .status-badge.error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar card">
+      <div class="brand">
+        <h2>HomeDCIM</h2>
+        <div class="tiny muted">机柜与设备</div>
+      </div>
+      <nav class="nav">
+        <a href="index.html">仪表盘</a>
+        <a href="management.html">设备管理</a>
+        <details class="nav-group">
+          <summary>设备远程</summary>
+          <div class="nav-children">
+            <a href="ssh.html">SSH 终端</a>
+            <a href="vnc.html" class="active">VNC 远程</a>
+          </div>
+        </details>
+        <a href="analytics.html">分析报表</a>
+      </nav>
+      <div class="sidebar-footer tiny muted">v0.1 • HomeDCIM</div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar card">
+        <div>
+          <h3 style="margin:0">VNC 远程桌面（通过 websockify）</h3>
+        </div>
+        <div class="actions">
+          <span id="vnc-status" class="status-badge">未连接</span>
+        </div>
+      </header>
+
+      <section class="card">
+        <div id="vnc-controls">
+          <div>
+            <label style="display:inline;margin-right:6px">VNC 主机</label>
+            <input id="vhost" type="text" value="127.0.0.1" />
+          </div>
+          <div>
+            <label style="display:inline;margin-right:6px">VNC 端口</label>
+            <input id="vport" type="number" value="5900" min="1" max="65535" />
+          </div>
+          <div>
+            <label style="display:inline;margin-right:6px">WebSocket 端口</label>
+            <input id="wsport" type="number" value="6080" min="1" max="65535" />
+          </div>
+          <button id="start-ws" class="btn">启动 WebSocket 代理</button>
+          <button id="connect-vnc" class="btn secondary" style="display:none">连接 VNC</button>
+        </div>
+
+        <div id="vnc-viewer">
+          <canvas id="canvas"></canvas>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:12px">
+        <h4 style="margin-top:0">说明</h4>
+        <ul style="color:var(--muted);font-size:0.9rem;line-height:1.6">
+          <li><strong>websockify</strong> 是一个 WebSocket 转 TCP 的代理，需要在主机上安装运行</li>
+          <li>Windows 用户可在 WSL 中安装：<code style="background:#f8fafc;padding:2px 4px;border-radius:4px">pip install websockify</code></li>
+          <li>Linux 用户直接安装：<code style="background:#f8fafc;padding:2px 4px;border-radius:4px">apt-get install websockify</code> 或 <code style="background:#f8fafc;padding:2px 4px;border-radius:4px">pip install websockify</code></li>
+          <li>输入 VNC 主机信息，点击"启动 WebSocket 代理"，代理启动后点击"连接 VNC" 进行连接</li>
+          <li>确保目标 VNC 服务器（如 TightVNC / RealVNC）已运行并监听在指定端口</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <!-- NoVNC core library -->
+  <script src="https://cdn.jsdelivr.net/npm/@novnc/novnc/core/rfb.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@novnc/novnc/core/input/keysym.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@novnc/novnc/core/input/keyboard.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@novnc/novnc/core/input/mouse.js"></script>
+
+  <script>
+    (function() {
+      const vhostInput = document.getElementById('vhost');
+      const vportInput = document.getElementById('vport');
+      const wsportInput = document.getElementById('wsport');
+      const startBtn = document.getElementById('start-ws');
+      const connectBtn = document.getElementById('connect-vnc');
+      const statusBadge = document.getElementById('vnc-status');
+      const canvas = document.getElementById('canvas');
+
+      let rfb = null;
+      let websockifyStarted = false;
+
+      function setStatus(text, type = 'default') {
+        statusBadge.textContent = text;
+        statusBadge.className = 'status-badge';
+        if (type === 'active') statusBadge.classList.add('active');
+        if (type === 'error') statusBadge.classList.add('error');
+      }
+
+      startBtn.addEventListener('click', async () => {
+        const vhost = vhostInput.value;
+        const vport = Number(vportInput.value || 5900);
+        const wsport = Number(wsportInput.value || 6080);
+
+        setStatus('启动中...', 'default');
+        startBtn.disabled = true;
+
+        try {
+          const resp = await fetch('/api/start-websockify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetHost: vhost, targetPort: vport, wsPort: wsport })
+          });
+          const j = await resp.json();
+
+          if (!j.ok) {
+            setStatus('启动失败: ' + (j.error || JSON.stringify(j)), 'error');
+            startBtn.disabled = false;
+            return;
+          }
+
+          websockifyStarted = true;
+          setStatus('代理已启动，等待连接...', 'active');
+          connectBtn.style.display = 'inline-flex';
+          startBtn.style.display = 'none';
+        } catch (e) {
+          setStatus('请求失败: ' + e.message, 'error');
+          startBtn.disabled = false;
+        }
+      });
+
+      connectBtn.addEventListener('click', () => {
+        const wsport = Number(wsportInput.value || 6080);
+        const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+        const url = protocol + '://' + location.hostname + ':' + wsport + '/';
+
+        setStatus('连接中...', 'default');
+        connectBtn.disabled = true;
+
+        try {
+          rfb = new RFB(canvas, url, {
+            shared: false,
+            credentials: { username: '', password: '' }
+          });
+
+          rfb.viewOnly = false;
+
+          rfb.addEventListener('connect', () => {
+            setStatus('已连接', 'active');
+            connectBtn.disabled = false;
+          });
+
+          rfb.addEventListener('disconnect', () => {
+            setStatus('已断开连接', 'default');
+            connectBtn.disabled = false;
+            connectBtn.style.display = 'none';
+            startBtn.style.display = 'inline-flex';
+            startBtn.disabled = false;
+            websockifyStarted = false;
+          });
+
+          rfb.addEventListener('error', (e) => {
+            const msg = e.detail ? (e.detail.message || String(e.detail)) : String(e);
+            setStatus('连接错误: ' + msg, 'error');
+            connectBtn.disabled = false;
+          });
+        } catch (e) {
+          setStatus('RFB 初始化失败: ' + e.message, 'error');
+          connectBtn.disabled = false;
+        }
+      });
+
+      // Restore state on page load
+      if (websockifyStarted) {
+        connectBtn.style.display = 'inline-flex';
+        startBtn.style.display = 'none';
+      }
+    })();
+  </script>
+    <script>
+      // 自动展开侧边栏“设备远程”以显示活动子菜单
+      document.addEventListener('DOMContentLoaded', function(){
+        const nav = document.querySelector('.nav');
+        const group = nav && nav.querySelector('details.nav-group');
+        if (group && group.querySelector('.nav-children a.active')) group.open = true;
+      });
+    </script>
+</body>
+</html>

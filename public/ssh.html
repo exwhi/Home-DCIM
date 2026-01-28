@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SSH 终端 - HomeDCIM</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+  <style>
+    #terminal-wrapper { height: 500px; display: flex; flex-direction: column; }
+    #terminal { flex: 1; overflow: hidden; }
+    .controls-panel { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .controls-panel input { padding: 8px; border-radius: 6px; border: 1px solid rgba(15,23,42,0.06); background: #f8fafc; }
+    .controls-panel input[type="text"], .controls-panel input[type="number"] { width: 140px; }
+    .controls-panel input[type="password"] { width: 140px; }
+    .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #dc3545; margin-right: 4px; }
+    .status-indicator.connected { background: #28a745; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar card">
+      <div class="brand">
+        <h2>HomeDCIM</h2>
+        <div class="tiny muted">机柜与设备</div>
+      </div>
+      <nav class="nav">
+        <a href="index.html">仪表盘</a>
+        <a href="management.html">设备管理</a>
+        <details class="nav-group">
+          <summary>设备远程</summary>
+          <div class="nav-children">
+            <a href="ssh.html" class="active">SSH 终端</a>
+            <a href="vnc.html">VNC 远程</a>
+          </div>
+        </details>
+        <a href="analytics.html">分析报表</a>
+      </nav>
+      <div class="sidebar-footer tiny muted">v0.1 • HomeDCIM</div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar card">
+        <div>
+          <h3 style="margin:0">SSH 终端（WebSocket 代理）</h3>
+        </div>
+        <div class="actions">
+          <span class="tiny muted"><span class="status-indicator" id="status-indicator"></span><span id="status-text">未连接</span></span>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="controls-panel">
+          <div>
+            <label style="display:inline;margin-right:6px">主机</label>
+            <input id="host" type="text" value="127.0.0.1" />
+          </div>
+          <div>
+            <label style="display:inline;margin-right:6px">端口</label>
+            <input id="port" type="number" value="22" min="1" max="65535" />
+          </div>
+          <div>
+            <label style="display:inline;margin-right:6px">用户</label>
+            <input id="username" type="text" value="root" />
+          </div>
+          <div>
+            <label style="display:inline;margin-right:6px">密码</label>
+            <input id="password" type="password" />
+          </div>
+          <button id="connect" class="btn">连接</button>
+          <button id="disconnect" class="btn secondary" style="display:none">断开</button>
+        </div>
+        <div id="terminal-wrapper">
+          <div id="terminal"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+  <script src="/ssh.js"></script>
+  <script>
+    // 自动展开侧边栏“设备远程”以显示活动子菜单
+    document.addEventListener('DOMContentLoaded', function(){
+      const nav = document.querySelector('.nav');
+      const group = nav && nav.querySelector('details.nav-group');
+      if (group && group.querySelector('.nav-children a.active')) group.open = true;
+    });
+  </script>
+</body>
+</html>

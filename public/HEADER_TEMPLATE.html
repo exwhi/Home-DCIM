@@ -1,0 +1,46 @@
+<!-- 
+  统一的页面头部结构 - 所有页面应该使用此结构
+  用法: 在每个 HTML 页面的 <body> 中放置此结构
+-->
+
+<div class="app-shell">
+  <!-- 侧栏导航 (所有页面相同) -->
+  <aside class="sidebar card">
+    <div class="brand">
+      <h2>HomeDCIM</h2>
+      <div class="tiny muted">机柜与设备</div>
+    </div>
+    <nav class="nav">
+      <a href="index.html">仪表盘</a>
+      <a href="management.html">设备管理</a>
+      <details class="nav-group">
+        <summary>设备远程</summary>
+        <div class="nav-children">
+          <a href="ssh.html">SSH 终端</a>
+          <a href="vnc.html">VNC 远程</a>
+        </div>
+      </details>
+      <a href="analytics.html">分析报表</a>
+    </nav>
+    <div class="sidebar-footer tiny muted">v0.1 • 本地</div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <div class="main-area">
+    <!-- 顶栏 (各页面按需调整内容) -->
+    <header class="topbar card">
+      <div>
+        <h3 style="margin:0">页面标题</h3>
+      </div>
+      <div class="actions">
+        <!-- 各页面的具体按钮/状态放这里 -->
+        <button class="btn">操作按钮</button>
+      </div>
+    </header>
+
+    <!-- 主要内容 -->
+    <section class="card">
+      <!-- 各页面具体内容 -->
+    </section>
+  </div>
+</div>

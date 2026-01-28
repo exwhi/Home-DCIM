@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>设备管理 - HomeDCIM</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .tab-nav { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(15,23,42,0.06); }
+    .tab-nav button { padding: 8px 12px; background: none; border: none; cursor: pointer; color: var(--muted); font-size: 0.9rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab-nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 12px 0; }
+    .stat-card { background: linear-gradient(135deg, #f5f7fa, #ffffff); padding: 12px; border-radius: 8px; border-left: 4px solid var(--accent); }
+    .stat-label { font-size: 0.85rem; color: var(--muted); }
+    .stat-value { font-size: 1.4rem; font-weight: 600; margin-top: 4px; }
+    .progress-bar { width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+    .alert-item { padding: 8px; margin: 8px 0; border-radius: 6px; border-left: 4px solid; }
+    .alert-item.warning { background: #fff3cd; border-color: #ffc107; }
+    .alert-item.error { background: #f8d7da; border-color: #dc3545; }
+    .alert-item.info { background: #d1ecf1; border-color: #17a2b8; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar card">
+      <div class="brand">
+        <h2>HomeDCIM</h2>
+        <div class="tiny muted">机柜与设备</div>
+      </div>
+      <nav class="nav">
+        <a href="index.html">仪表盘</a>
+        <a href="management.html" class="active">设备管理</a>
+        <details class="nav-group">
+          <summary>设备远程</summary>
+          <div class="nav-children">
+            <a href="ssh.html">SSH 终端</a>
+            <a href="vnc.html">VNC 远程</a>
+          </div>
+        </details>
+        <a href="analytics.html">分析报表</a>
+      </nav>
+      <div class="sidebar-footer tiny muted">v0.1 • HomeDCIM</div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar card">
+        <div>
+          <h3 style="margin:0">设备管理中心</h3>
+        </div>
+        <div class="actions">
+          <button id="refresh-btn" class="btn secondary">刷新</button>
+          <button id="add-device-btn" class="btn">新增设备</button>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="tab-nav">
+          <button class="tab-btn active" data-tab="power">功率管理</button>
+          <button class="tab-btn" data-tab="network">网络连接</button>
+          <button class="tab-btn" data-tab="assets">资产追踪</button>
+          <button class="tab-btn" data-tab="alerts">告警监控</button>
+          <button class="tab-btn" data-tab="templates">设备模板</button>
+        </div>
+
+        <!-- 功率管理 -->
+        <div id="power" class="tab-content active">
+          <h4>功率管理</h4>
+          <div id="power-summary" class="stat-row">
+            <div class="stat-card">
+              <div class="stat-label">总功率</div>
+              <div class="stat-value" id="total-power">0 W</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">最大功率</div>
+              <div class="stat-value" id="max-power">3000 W</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">利用率</div>
+              <div class="stat-value" id="power-util">0%</div>
+            </div>
+          </div>
+          <div style="margin: 12px 0;">
+            <label>功率进度</label>
+            <div class="progress-bar">
+              <div class="progress-fill" id="power-progress" style="width: 0%"></div>
+            </div>
+          </div>
+          <table style="width:100%; margin-top:12px; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(15,23,42,0.06);">
+                <th style="text-align:left; padding:8px;">设备名称</th>
+                <th style="text-align:left; padding:8px;">功率 (W)</th>
+                <th style="text-align:left; padding:8px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="power-devices"></tbody>
+          </table>
+          <div style="margin-top:12px;">
+            <label>设置最大功率限制 (W):</label>
+            <div style="display:flex; gap:8px;">
+              <input id="max-power-input" type="number" value="3000" style="flex:1; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.06);">
+              <button id="save-power-limit" class="btn">保存</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 网络连接 -->
+        <div id="network" class="tab-content">
+          <h4>网络连接管理</h4>
+          <p class="tiny muted">编辑设备的网络配置信息</p>
+          <table style="width:100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(15,23,42,0.06);">
+                <th style="text-align:left; padding:8px;">设备名称</th>
+                <th style="text-align:left; padding:8px;">IP 地址</th>
+                <th style="text-align:left; padding:8px;">MAC 地址</th>
+                <th style="text-align:left; padding:8px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="network-devices"></tbody>
+          </table>
+        </div>
+
+        <!-- 资产追踪 -->
+        <div id="assets" class="tab-content">
+          <h4>设备资产信息</h4>
+          <p class="tiny muted">管理设备的购买信息、保修期和序列号</p>
+          <table style="width:100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(15,23,42,0.06);">
+                <th style="text-align:left; padding:8px;">设备</th>
+                <th style="text-align:left; padding:8px;">序列号</th>
+                <th style="text-align:left; padding:8px;">购买日期</th>
+                <th style="text-align:left; padding:8px;">保修期至</th>
+                <th style="text-align:left; padding:8px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="assets-devices"></tbody>
+          </table>
+        </div>
+
+        <!-- 告警监控 -->
+        <div id="alerts" class="tab-content">
+          <h4>系统告警</h4>
+          <div style="margin-bottom:12px;">
+            <button id="dismiss-all-alerts" class="btn secondary">全部确认</button>
+          </div>
+          <div id="alerts-list">
+            <p class="tiny muted">暂无告警</p>
+          </div>
+        </div>
+
+        <!-- 设备模板 -->
+        <div id="templates" class="tab-content">
+          <h4>设备模板库</h4>
+          <p class="tiny muted">预定义常见设备的规格和功率</p>
+          <div style="margin-bottom:12px;">
+            <button id="add-template-btn" class="btn">新增模板</button>
+          </div>
+          <table style="width:100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(15,23,42,0.06);">
+                <th style="text-align:left; padding:8px;">模板名称</th>
+                <th style="text-align:left; padding:8px;">类型</th>
+                <th style="text-align:left; padding:8px;">功率 (W)</th>
+                <th style="text-align:left; padding:8px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="templates-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        const tabId = btn.dataset.tab;
+        document.getElementById(tabId).classList.add('active');
+      });
+    });
+
+    // Load data
+    async function load() {
+      // Power summary
+      const powerResp = await fetch('/api/power-summary').then(r => r.json());
+      document.getElementById('total-power').textContent = powerResp.totalPower + ' W';
+      document.getElementById('max-power').textContent = powerResp.maxPower + ' W';
+      document.getElementById('power-util').textContent = powerResp.utilization + '%';
+      document.getElementById('power-progress').style.width = Math.min(100, parseFloat(powerResp.utilization)) + '%';
+      
+      const deviceRows = powerResp.devices.map(d => 
+        `<tr style="border-bottom:1px solid rgba(15,23,42,0.06);">
+          <td style="padding:8px;">${d.name}</td>
+          <td style="padding:8px;">${d.power} W</td>
+          <td style="padding:8px;"><button class="btn secondary small" onclick="editDevicePower(${d.id})">编辑</button></td>
+        </tr>`
+      ).join('');
+      document.getElementById('power-devices').innerHTML = deviceRows || '<tr><td colspan="3" style="padding:12px; text-align:center;" class="tiny muted">暂无设备</td></tr>';
+
+      // Network devices
+      const devices = await fetch('/api/devices').then(r => r.json());
+      const networkRows = devices.map(d =>
+        `<tr style="border-bottom:1px solid rgba(15,23,42,0.06);">
+          <td style="padding:8px;">${d.name}</td>
+          <td style="padding:8px;">${d.ip || '--'}</td>
+          <td style="padding:8px;">${d.mac || '--'}</td>
+          <td style="padding:8px;"><button class="btn secondary small" onclick="editNetworkInfo(${d.id})">编辑</button></td>
+        </tr>`
+      ).join('');
+      document.getElementById('network-devices').innerHTML = networkRows || '<tr><td colspan="4" style="padding:12px; text-align:center;" class="tiny muted">暂无设备</td></tr>';
+
+      // Assets
+      const assetRows = devices.map(d =>
+        `<tr style="border-bottom:1px solid rgba(15,23,42,0.06);">
+          <td style="padding:8px;">${d.name}</td>
+          <td style="padding:8px;">${d.serialNumber || '--'}</td>
+          <td style="padding:8px;">${d.purchaseDate || '--'}</td>
+          <td style="padding:8px;">${d.warrantyEnd || '--'}</td>
+          <td style="padding:8px;"><button class="btn secondary small" onclick="editAsset(${d.id})">编辑</button></td>
+        </tr>`
+      ).join('');
+      document.getElementById('assets-devices').innerHTML = assetRows || '<tr><td colspan="5" style="padding:12px; text-align:center;" class="tiny muted">暂无设备</td></tr>';
+
+      // Alerts
+      const alerts = await fetch('/api/alerts').then(r => r.json());
+      const alertsHtml = alerts.slice(0, 10).map(a =>
+        `<div class="alert-item ${a.severity}">[${a.severity.toUpperCase()}] ${a.message} <span class="tiny muted">${new Date(a.created_at).toLocaleString()}</span></div>`
+      ).join('');
+      document.getElementById('alerts-list').innerHTML = alertsHtml || '<p class="tiny muted">暂无告警</p>';
+
+      // Templates
+      const templates = await fetch('/api/templates').then(r => r.json());
+      const templateRows = templates.map(t =>
+        `<tr style="border-bottom:1px solid rgba(15,23,42,0.06);">
+          <td style="padding:8px;">${t.name}</td>
+          <td style="padding:8px;">${t.type || '--'}</td>
+          <td style="padding:8px;">${t.powerW} W</td>
+          <td style="padding:8px;"><button class="btn secondary small" onclick="deleteTemplate(${t.id})">删除</button></td>
+        </tr>`
+      ).join('');
+      document.getElementById('templates-list').innerHTML = templateRows || '<tr><td colspan="4" style="padding:12px; text-align:center;" class="tiny muted">暂无模板</td></tr>';
+    }
+
+    // 自动展开侧边栏“设备远程”以显示活动子菜单（如果有）
+    document.addEventListener('DOMContentLoaded', function(){
+      const nav = document.querySelector('.nav');
+      const group = nav && nav.querySelector('details.nav-group');
+      if (group && group.querySelector('.nav-children a.active')) group.open = true;
+    });
+
+    function editDevicePower(id) {
+      const power = prompt('输入功率 (W):', '100');
+      if (power !== null) {
+        fetch(`/api/devices/${id}`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ powerW: Number(power) })
+        }).then(() => load());
+      }
+    }
+
+    function editNetworkInfo(id) {
+      const ip = prompt('输入 IP 地址:', '');
+      if (ip !== null) {
+        const mac = prompt('输入 MAC 地址:', '');
+        fetch(`/api/devices/${id}/network`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ ip, mac })
+        }).then(() => load());
+      }
+    }
+
+    function editAsset(id) {
+      const serial = prompt('序列号:', '');
+      if (serial !== null) {
+        const purchaseDate = prompt('购买日期 (YYYY-MM-DD):', '');
+        fetch(`/api/devices/${id}/asset`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ serialNumber: serial, purchaseDate })
+        }).then(() => load());
+      }
+    }
+
+    function deleteTemplate(id) {
+      if (confirm('确定删除此模板？')) {
+        fetch(`/api/templates/${id}`, { method: 'DELETE' }).then(() => load());
+      }
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', load);
+    document.getElementById('save-power-limit').addEventListener('click', () => {
+      const maxPower = Number(document.getElementById('max-power-input').value);
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ maxPower })
+      }).then(() => {
+        alert('设置已保存');
+        load();
+      });
+    });
+
+    document.getElementById('dismiss-all-alerts').addEventListener('click', async () => {
+      const alerts = await fetch('/api/alerts').then(r => r.json());
+      for (const a of alerts) {
+        if (!a.acknowledged) {
+          await fetch(`/api/alerts/${a.id}/acknowledge`, { method: 'PUT' });
+        }
+      }
+      load();
+    });
+
+    document.getElementById('add-template-btn').addEventListener('click', () => {
+      const name = prompt('模板名称:', '');
+      if (name) {
+        const type = prompt('类型:', '');
+        const power = Number(prompt('功率 (W):', '100'));
+        fetch('/api/templates', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ name, type, powerW: power })
+        }).then(() => load());
+      }
+    });
+
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

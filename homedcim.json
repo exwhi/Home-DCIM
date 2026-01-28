@@ -1,0 +1,135 @@
+{
+  "cabinets": [
+    {
+      "id": 1,
+      "name": "qfteam",
+      "location": "qq",
+      "description": "",
+      "created_at": "2025-10-05T09:30:16.337Z"
+    },
+    {
+      "id": 2,
+      "name": "RackA",
+      "location": "DataCenter",
+      "description": "Test rack",
+      "created_at": "2025-10-05T10:38:51.566Z"
+    }
+  ],
+  "lastId": 2,
+  "devices": [
+    {
+      "id": 1,
+      "name": "Switch1",
+      "ip": "192.168.1.10",
+      "type": "switch",
+      "cabinetId": null,
+      "created_at": "2025-10-05T09:43:42.109Z",
+      "online": false,
+      "lastChecked": "2025-10-25T04:58:05.419Z"
+    },
+    {
+      "id": 2,
+      "name": "TestDev",
+      "ip": "192.168.1.99",
+      "type": "server",
+      "cabinetId": 2,
+      "created_at": "2025-10-05T10:38:51.572Z",
+      "online": false,
+      "lastChecked": "2025-10-25T04:58:05.417Z",
+      "position": null
+    },
+    {
+      "id": 3,
+      "name": "MultiU1",
+      "ip": "10.0.0.1",
+      "type": "server",
+      "cabinetId": 2,
+      "position": 1,
+      "created_at": "2025-10-05T11:07:55.134Z",
+      "heightU": 3,
+      "online": false,
+      "lastChecked": "2025-10-25T05:03:39.170Z"
+    }
+  ],
+  "deviceLastId": 3,
+  "devicesLastId": 0,
+  "audits": [
+    {
+      "id": 1761572088364,
+      "action": "ssh.connect.attempt",
+      "details": {
+        "host": "103.186.214.101",
+        "port": 22,
+        "username": "root"
+      },
+      "user": "system",
+      "timestamp": "2025-10-27T13:34:48.364Z"
+    },
+    {
+      "id": 1764809735525,
+      "timestamp": "2025-12-04T00:55:35.525Z",
+      "action": "ssh.connect.attempt",
+      "details": {
+        "host": "103.186.214.101",
+        "port": 22,
+        "username": "root"
+      },
+      "user": "unknown"
+    },
+    {
+      "id": 1764810242586,
+      "timestamp": "2025-12-04T01:04:02.586Z",
+      "action": "ssh.connect.attempt",
+      "details": {
+        "host": "103.186.214.101",
+        "port": 22,
+        "username": "root"
+      },
+      "user": "unknown"
+    },
+    {
+      "id": 1764810708826,
+      "timestamp": "2025-12-04T01:11:48.826Z",
+      "action": "websockify.start",
+      "details": {
+        "wsPort": 6080,
+        "targetHost": "127.0.0.1",
+        "targetPort": 5900
+      },
+      "user": "unknown"
+    },
+    {
+      "id": 1769525220722,
+      "timestamp": "2026-01-27T14:47:00.722Z",
+      "action": "ssh.connect.attempt",
+      "details": {
+        "host": "38.76.196.21",
+        "port": 22,
+        "username": "root"
+      },
+      "user": "unknown"
+    },
+    {
+      "id": 1769526220683,
+      "timestamp": "2026-01-27T15:03:40.683Z",
+      "action": "websockify.start",
+      "details": {
+        "wsPort": 6080,
+        "targetHost": "127.0.0.1",
+        "targetPort": 5900
+      },
+      "user": "unknown"
+    }
+  ],
+  "alerts": [],
+  "templates": [],
+  "settings": {
+    "maxPower": 3000,
+    "maxTemp": 45,
+    "autoAlert": true
+  },
+  "power": [],
+  "networkInterfaces": [],
+  "assets": [],
+  "capacityPlans": []
+}

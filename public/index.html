@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>家庭机柜管理（DCIM）</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar card">
+        <div class="brand">
+          <h2>HomeDCIM</h2>
+          <div class="tiny muted">机柜与设备</div>
+        </div>
+        <nav class="nav">
+          <a href="index.html" class="active">仪表盘</a>
+          <a href="#" onclick="setPage('cabinet'); return false">机柜</a>
+          <a href="#" onclick="setPage('device'); return false">设备</a>
+          <details class="nav-group">
+            <summary>设备远程</summary>
+            <div class="nav-children">
+              <a href="ssh.html">SSH 终端</a>
+              <a href="vnc.html">VNC 远程</a>
+            </div>
+          </details>
+          <a href="analytics.html">分析报表</a>
+          <a href="#" onclick="setPage('network'); return false">网络</a>
+        </nav>
+        <div class="sidebar-footer tiny muted">v0.1 • HomeDCIM</div>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar card">
+          <div class="search-wrap">
+            <input id="search" type="search" placeholder="搜索名称 / 位置 / 描述" />
+          </div>
+          <div class="actions">
+            <button id="new-btn" class="btn">新建</button>
+            <button id="export-json" class="btn secondary">导出 JSON</button>
+            <input id="import-file" type="file" accept="application/json" style="display:none" />
+            <button id="import-json" class="btn secondary">导入 JSON</button>
+          </div>
+        </header>
+
+        <section class="dashboard-widgets" style="margin:12px 0;display:flex;gap:12px;align-items:stretch">
+          <div class="widget card" id="widget-devices">
+            <div class="widget-left"> <!-- icon -->
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18v12H3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="widget-body">
+              <div class="tiny muted">在线设备</div>
+              <div id="widget-devices-count" style="font-size:1.4rem;font-weight:600">0</div>
+            </div>
+          </div>
+
+          <div class="widget card" id="widget-network">
+            <div class="widget-left">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v20M2 12h20" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            </div>
+            <div class="widget-body">
+              <div class="tiny muted">网络状态</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div id="widget-network-summary" style="font-size:1rem">--</div>
+                  <button id="scan-all-snmp" class="btn secondary small">全部检测</button>
+                </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="content">
+          <section id="grid-section" class="card">
+            <h3>机柜视图</h3>
+            <div id="grid" class="grid"></div>
+          </section>
+
+          <aside id="detail-panel" class="card">
+            <h3>机柜详情</h3>
+            <form id="cabinet-form">
+              <input type="hidden" id="cabinet-id" />
+              <label>名称<input id="name" required /></label>
+              <label>位置<input id="location" /></label>
+              <label>描述<textarea id="description"></textarea></label>
+              <div class="row">
+                <button type="submit" class="btn">保存</button>
+                <button type="button" id="reset-btn" class="btn secondary">重置</button>
+                <button type="button" id="delete-btn" class="btn danger" style="margin-left:auto">删除</button>
+              </div>
+            </form>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+      // Ensure sidebar nav has no duplicate labels (fixes duplicate '网络' shown in preview)
+      document.addEventListener('DOMContentLoaded', function(){
+        const nav = document.querySelector('.nav');
+        if (!nav) return;
+        const seen = new Set();
+        Array.from(nav.querySelectorAll('a')).forEach(a => {
+          const key = a.textContent.trim();
+          if (seen.has(key)) {
+            // remove duplicate
+            a.remove();
+          } else {
+            seen.add(key);
+          }
+        });
+        // If remote submenu contains an active child, expand it for visibility
+        const group = nav.querySelector('details.nav-group');
+        if (group && group.querySelector('.nav-children a.active')) {
+          group.open = true;
+        }
+      });
+    </script>
+  </body>
+</html>

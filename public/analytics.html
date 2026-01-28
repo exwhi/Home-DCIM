@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>分析报表 - HomeDCIM</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .chart-container { margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #f5f7fa, #ffffff); border-radius: 8px; }
+    .chart-title { font-weight: 600; margin-bottom: 10px; }
+    .bar { display: flex; align-items: center; margin: 8px 0; }
+    .bar-label { width: 150px; font-size: 0.9rem; }
+    .bar-value { flex: 1; height: 20px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 4px; margin: 0 10px; }
+    .bar-text { width: 60px; text-align: right; font-size: 0.85rem; color: var(--muted); }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 12px 0; }
+    .stat-box { background: linear-gradient(135deg, #eef2ff, #eef8ff); padding: 15px; border-radius: 8px; border-left: 4px solid var(--accent); }
+    .stat-box.warning { border-left-color: #ffc107; background: linear-gradient(135deg, #fff3cd, #fffbf0); }
+    .stat-box.error { border-left-color: #dc3545; background: linear-gradient(135deg, #f8d7da, #fff0f3); }
+    .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); margin: 8px 0; }
+    .label { font-size: 0.85rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar card">
+      <div class="brand">
+        <h2>HomeDCIM</h2>
+        <div class="tiny muted">机柜与设备</div>
+      </div>
+      <nav class="nav">
+        <a href="index.html">仪表盘</a>
+        <a href="management.html">设备管理</a>
+        <details class="nav-group">
+          <summary>设备远程</summary>
+          <div class="nav-children">
+            <a href="ssh.html">SSH 终端</a>
+            <a href="vnc.html">VNC 远程</a>
+          </div>
+        </details>
+        <a href="analytics.html" class="active">分析报表</a>
+      </nav>
+      <div class="sidebar-footer tiny muted">v0.1 • HomeDCIM</div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar card">
+        <div>
+          <h3 style="margin:0">分析和报表</h3>
+        </div>
+        <div class="actions">
+          <button id="refresh-btn" class="btn secondary">刷新</button>
+          <button id="export-report" class="btn">导出报告</button>
+        </div>
+      </header>
+
+      <section class="card">
+        <h4>机柜总体概览</h4>
+        <div class="stat-grid" id="overview-stats"></div>
+      </section>
+
+      <section class="card">
+        <h4>机柜容量分析</h4>
+        <div id="capacity-analysis"></div>
+      </section>
+
+      <section class="card">
+        <h4>功率消耗排行</h4>
+        <div class="chart-container">
+          <div class="chart-title">前 10 大功率消耗设备</div>
+          <div id="power-chart"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h4>系统状态</h4>
+        <div id="system-status" class="stat-grid"></div>
+      </section>
+
+      <section class="card">
+        <h4>环境监测</h4>
+        <div id="environment-data" class="stat-grid"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    async function loadReport() {
+      try {
+        // Get capacity analysis
+        const capacity = await fetch('/api/capacity-analysis').then(r => r.json());
+        const report = await fetch('/api/reports/capacity').then(r => r.json());
+        const settings = await fetch('/api/settings').then(r => r.json());
+        const environment = await fetch('/api/environment').then(r => r.json());
+
+        // Overview stats
+        const overviewHtml = `
+          <div class="stat-box">
+            <div class="label">总机柜数</div>
+            <div class="value">${report.summary.totalCabinets}</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">总设备数</div>
+            <div class="value">${report.summary.totalDevices}</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">在线设备</div>
+            <div class="value">${report.summary.onlineDevices}</div>
+          </div>
+          <div class="stat-box ${report.summary.activeAlerts > 0 ? 'warning' : ''}">
+            <div class="label">活跃告警</div>
+            <div class="value">${report.summary.activeAlerts}</div>
+          </div>
+        `;
+        document.getElementById('overview-stats').innerHTML = overviewHtml;
+
+        // Capacity analysis
+        const capacityHtml = capacity.map(c => `
+          <div style="margin:12px 0; padding:12px; background:#f8fafc; border-radius:6px;">
+            <div style="font-weight:600; margin-bottom:8px;">${c.cabinetName}</div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:0.85rem;">
+              <div>设备数: <strong>${c.totalDevices}</strong></div>
+              <div>已用U位: <strong>${c.occupiedU}/42</strong></div>
+              <div>剩余U位: <strong>${c.availableU}</strong></div>
+              <div>利用率: <strong>${c.utilizationPercent}%</strong></div>
+            </div>
+            <div style="margin-top:8px;">
+              <div style="font-size:0.8rem; color:var(--muted); margin-bottom:4px;">U位使用</div>
+              <div style="height:8px; background:#e9ecef; border-radius:4px; overflow:hidden;">
+                <div style="height:100%; width:${c.utilizationPercent}%; background:linear-gradient(90deg, var(--accent), var(--accent-2));"></div>
+              </div>
+            </div>
+            <div style="margin-top:8px; font-size:0.85rem;">
+              <span>功率: <strong>${c.totalPower}W</strong></span>
+              <span style="margin-left:12px;">功率限制: <strong>${settings.maxPower}W</strong></span>
+            </div>
+          </div>
+        `).join('');
+        document.getElementById('capacity-analysis').innerHTML = capacityHtml;
+
+        // Power chart
+        const powerChart = report.topPowerConsumers.map(d => {
+          const maxPower = Math.max(...report.topPowerConsumers.map(x => x.power || 0), 1);
+          const percent = ((d.power / maxPower) * 100).toFixed(0);
+          return `
+            <div class="bar">
+              <div class="bar-label">${d.name}</div>
+              <div class="bar-value" style="width:${percent}%"></div>
+              <div class="bar-text">${d.power}W</div>
+            </div>
+          `;
+        }).join('');
+        document.getElementById('power-chart').innerHTML = powerChart || '<p class="tiny muted">暂无数据</p>';
+
+        // System status
+        const systemHtml = `
+          <div class="stat-box">
+            <div class="label">CPU 温度</div>
+            <div class="value">${environment.temperature}°C</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">湿度</div>
+            <div class="value">${environment.humidity}%</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">气流</div>
+            <div class="value">${environment.airflow} CFM</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">生成时间</div>
+            <div class="value" style="font-size:0.9rem;">${new Date(report.generatedAt).toLocaleString()}</div>
+          </div>
+        `;
+        document.getElementById('system-status').innerHTML = systemHtml;
+
+        // Environment
+        const envHtml = `
+          <div class="stat-box ${environment.temperature > settings.maxTemp ? 'warning' : ''}">
+            <div class="label">机柜温度</div>
+            <div class="value">${environment.temperature}°C ${environment.temperature > settings.maxTemp ? '⚠️' : ''}</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">限制: ${settings.maxTemp}°C</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">相对湿度</div>
+            <div class="value">${environment.humidity}%</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">推荐: 40-60%</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">冷却能力</div>
+            <div class="value">${environment.airflow} CFM</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">监测中</div>
+          </div>
+        `;
+        document.getElementById('environment-data').innerHTML = envHtml;
+      } catch(e) {
+        console.error('报表加载失败:', e);
+      }
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', loadReport);
+    document.getElementById('export-report').addEventListener('click', async () => {
+      const report = await fetch('/api/reports/capacity').then(r => r.json());
+      const blob = new Blob([JSON.stringify(report, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dcim-report-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+    });
+
+    loadReport();
+    setInterval(loadReport, 60000);
+  </script>
+    // 自动展开侧边栏“设备远程”以显示活动子菜单
+    document.addEventListener('DOMContentLoaded', function(){
+      const nav = document.querySelector('.nav');
+      const group = nav && nav.querySelector('details.nav-group');
+      if (group && group.querySelector('.nav-children a.active')) group.open = true;
+    });
+</body>
+</html>
