@@ -40,8 +40,17 @@
             <button id="export-json" class="btn secondary">导出 JSON</button>
             <input id="import-file" type="file" accept="application/json" style="display:none" />
             <button id="import-json" class="btn secondary">导入 JSON</button>
+            <button id="select-sensor-btn" class="btn secondary" title="选择 USB 温湿度传感器">选择传感器</button>
+            <button id="unselect-sensor-btn" class="btn secondary" title="移除已配置的传感器">移除传感器</button>
+            <div id="sensor-info" class="tiny muted" style="margin-left:8px;display:inline-block">未配置传感器</div>
           </div>
         </header>
+
+        <!-- System control card (主控信息) -->
+        <section class="card" id="system-card" style="margin-bottom:12px">
+          <h4 style="margin:0 0 8px">系统主控信息</h4>
+          <div id="system-info" class="tiny muted">正在加载...</div>
+        </section>
 
         <section class="dashboard-widgets" style="margin:12px 0;display:flex;gap:12px;align-items:stretch">
           <div class="widget card" id="widget-devices">
@@ -66,32 +75,36 @@
                 </div>
             </div>
           </div>
+          <div class="widget card" id="widget-env">
+            <div class="widget-left">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            </div>
+            <div class="widget-body">
+              <div class="tiny muted">机柜环境 (USB 传感器)</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div id="widget-env-temp" style="font-size:1.1rem;font-weight:600">-- °C</div>
+                <div id="widget-env-hum" style="font-size:0.95rem;color:var(--muted)">-- %</div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <div class="content">
-          <section id="grid-section" class="card">
-            <h3>机柜视图</h3>
-            <div id="grid" class="grid"></div>
+          <section class="card">
+            <h3>欢迎</h3>
+            <p class="tiny muted">仪表盘显示系统概览。要查看机柜布局，请点击左侧的“机柜”菜单。</p>
           </section>
-
-          <aside id="detail-panel" class="card">
-            <h3>机柜详情</h3>
-            <form id="cabinet-form">
-              <input type="hidden" id="cabinet-id" />
-              <label>名称<input id="name" required /></label>
-              <label>位置<input id="location" /></label>
-              <label>描述<textarea id="description"></textarea></label>
-              <div class="row">
-                <button type="submit" class="btn">保存</button>
-                <button type="button" id="reset-btn" class="btn secondary">重置</button>
-                <button type="button" id="delete-btn" class="btn danger" style="margin-left:auto">删除</button>
-              </div>
-            </form>
-          </aside>
         </div>
+
+        <!-- 温度曲线放在页面最底部 -->
+        <section class="card" style="margin-top:12px">
+          <h4 style="margin-top:0">机柜环境温度曲线</h4>
+          <canvas id="env-chart" width="800" height="200" style="width:100%;max-width:800px"></canvas>
+        </section>
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="app.js"></script>
     <script>
       // Ensure sidebar nav has no duplicate labels (fixes duplicate '网络' shown in preview)

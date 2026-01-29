@@ -151,19 +151,18 @@
         }).join('');
         document.getElementById('power-chart').innerHTML = powerChart || '<p class="tiny muted">暂无数据</p>';
 
-        // System status
+        // System status - we'll fetch host system info for memory and CPU temp
+        const system = await fetch('/api/system').then(r=>r.json()).catch(()=>null);
+        const cpuLoad = system && (typeof system.cpuLoadPercent === 'number') ? `${system.cpuLoadPercent}%` : (system && typeof system.cpuTemp === 'number' ? `${system.cpuTemp}°C` : 'N/A');
+        const memUsage = system && system.memory ? `${system.memory.usedPercent}% (${Math.round(system.memory.used/1024/1024)}MB/${Math.round(system.memory.total/1024/1024)}MB)` : 'N/A';
         const systemHtml = `
           <div class="stat-box">
-            <div class="label">CPU 温度</div>
-            <div class="value">${environment.temperature}°C</div>
+            <div class="label">主控 CPU 使用率</div>
+            <div class="value">${cpuLoad}</div>
           </div>
           <div class="stat-box">
-            <div class="label">湿度</div>
-            <div class="value">${environment.humidity}%</div>
-          </div>
-          <div class="stat-box">
-            <div class="label">气流</div>
-            <div class="value">${environment.airflow} CFM</div>
+            <div class="label">内存使用率</div>
+            <div class="value">${memUsage}</div>
           </div>
           <div class="stat-box">
             <div class="label">生成时间</div>
@@ -183,11 +182,6 @@
             <div class="label">相对湿度</div>
             <div class="value">${environment.humidity}%</div>
             <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">推荐: 40-60%</div>
-          </div>
-          <div class="stat-box">
-            <div class="label">冷却能力</div>
-            <div class="value">${environment.airflow} CFM</div>
-            <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;">监测中</div>
           </div>
         `;
         document.getElementById('environment-data').innerHTML = envHtml;
@@ -209,12 +203,12 @@
 
     loadReport();
     setInterval(loadReport, 60000);
-  </script>
     // 自动展开侧边栏“设备远程”以显示活动子菜单
     document.addEventListener('DOMContentLoaded', function(){
       const nav = document.querySelector('.nav');
       const group = nav && nav.querySelector('details.nav-group');
       if (group && group.querySelector('.nav-children a.active')) group.open = true;
     });
+  </script>
 </body>
 </html>

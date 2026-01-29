@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { db, init } = require('./db');
+const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -150,6 +151,15 @@ app.get('/api/network-status', (req, res) => {
 
 // SNMP check endpoint
 const snmp = require('net-snmp');
+let SerialPort, ReadlineParser;
+try{
+  // use runtime serialport if available
+  SerialPort = require('serialport');
+  ReadlineParser = require('@serialport/parser-readline').ReadlineParser || require('@serialport/parser-readline');
+}catch(e){
+  SerialPort = null;
+  ReadlineParser = null;
+}
 app.post('/api/snmp-check', (req, res) => {
   const { id, ip } = req.body || {};
   const targetIp = ip || (id ? (db.get('devices').find({ id: Number(id) }).value() || {}).ip : null);
@@ -492,14 +502,176 @@ app.delete('/api/templates/:id', (req, res) => {
 });
 
 // 8. 温度和环境监控 (Environmental Monitoring - 模拟数据)
-app.get('/api/environment', (req, res) => {
-  // 模拟环境数据
-  res.json({
-    temperature: (20 + Math.random() * 15).toFixed(1),
-    humidity: (30 + Math.random() * 40).toFixed(0),
-    airflow: (100 + Math.random() * 50).toFixed(0),
-    timestamp: new Date().toISOString()
+app.get('/api/environment', async (req, res) => {
+  // 仅使用 Node.js 的 serialport 读取传感器；读取失败则返回缓存
+  const settings = db.get('settings').value() || {};
+  const sensor = settings.sensor || null;
+  const lastEnv = db.get('lastEnvironment').value() || null;
+  if (!sensor || !sensor.path){
+    if (lastEnv) return res.json(Object.assign({ source: 'cache' }, lastEnv));
+    return res.status(404).json({ error: '未配置传感器，且无历史数据' });
+  }
+
+  if (!SerialPort || !ReadlineParser){
+    if (lastEnv) return res.json(Object.assign({ source: 'cache', error: 'serialport not installed' }, lastEnv));
+    return res.status(500).json({ error: '服务器未启用 serialport 支持，请运行 `npm install serialport`' });
+  }
+
+  const portPath = String(sensor.path);
+  const baud = (sensor.baud && Number(sensor.baud)) || 9600;
+  const TimeoutMs = 3000;
+  const readOnce = () => new Promise((resolve, reject) => {
+    let resolved = false;
+    const sp = new SerialPort(portPath, { baudRate: baud, autoOpen: true }, (err) => {
+      if (err){ if (!resolved){ resolved = true; reject(err); } }
+    });
+    const parser = sp.pipe(new ReadlineParser({ delimiter: '\n' }));
+    const timer = setTimeout(()=>{
+      if (!resolved){ resolved = true; try{ sp.close(()=>{}); }catch(e){} reject(new Error('timeout')); }
+    }, TimeoutMs);
+    parser.once('data', line => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      try{ sp.close(()=>{}); }catch(e){}
+      resolve(line.trim());
+    });
+    sp.on('error', e=>{ if (!resolved){ resolved = true; clearTimeout(timer); try{ sp.close(()=>{}); }catch(e){} reject(e); } });
   });
+
+  try{
+    const line = await readOnce();
+    const m = line.match(/([0-9]+\.?[0-9]*)[^0-9]*([0-9]+)\%?/);
+    let temp=null, hum=null;
+    if (m){ temp = parseFloat(m[1]); hum = parseFloat(m[2]); }
+    else if (line.indexOf(',')>=0){ const p=line.split(',').map(s=>s.trim()); temp=parseFloat(p[0]); hum=parseFloat(p[1]); }
+    else { const p=line.split(/\s+/); if (p.length>=2){ temp=parseFloat(p[0]); hum=parseFloat(p[1]); } }
+    if (typeof temp === 'number' && !Number.isNaN(temp)){
+      // store temperature as a numeric value (rounded to 0.1) to avoid chart scaling issues
+      const tempVal = Number(temp.toFixed(1));
+      const env = { temperature: tempVal, humidity: (hum!==null? String(hum): null), airflow: null, timestamp: new Date().toISOString() };
+      db.set('lastEnvironment', env).write();
+      // append to history (keep last 200)
+      const hist = db.get('environmentHistory').value() || [];
+      hist.push(env);
+      if (hist.length > 200) hist.splice(0, hist.length - 200);
+      db.set('environmentHistory', hist).write();
+      return res.json(Object.assign({ source: 'serial', raw: line }, env));
+    }
+    if (lastEnv) return res.json(Object.assign({ source: 'cache', error: 'parse-failed', raw: line }, lastEnv));
+    return res.status(500).json({ error: '传感器数据解析失败', raw: line });
+  }catch(e){
+    console.log('Serial read failed', e && e.message);
+    if (lastEnv) return res.json(Object.assign({ source: 'cache', error: e && e.message }, lastEnv));
+    return res.status(500).json({ error: '串口读取失败: ' + (e && e.message) });
+  }
+});
+
+// Endpoint: select sensor (保存到 settings.sensor)
+app.post('/api/select-sensor', (req, res) => {
+  const { path: sensorPath, type } = req.body || {};
+  if (!sensorPath) return res.status(400).json({ error: '需要传感器路径 (path)，例如 COM3 或 /dev/ttyUSB0' });
+  db.set('settings.sensor', { path: sensorPath, type: type || 'serial' }).write();
+  console.log('Sensor configured:', sensorPath, type);
+  res.json({ ok: true, sensor: db.get('settings.sensor').value() });
+});
+
+app.get('/api/sensor', (req, res) => {
+  const sensor = (db.get('settings').value() || {}).sensor || null;
+  const lastEnv = db.get('lastEnvironment').value() || null;
+  res.json({ sensor, lastEnv });
+});
+
+// 卸载/取消已配置的传感器（释放）
+app.delete('/api/sensor', (req, res) => {
+  try{
+    db.set('settings.sensor', null).write();
+    console.log('Sensor configuration cleared');
+    recordAudit('sensor.unselect', { by: req.headers['x-user'] || 'web' }, req.headers['x-user']);
+    return res.json({ ok: true });
+  }catch(e){
+    console.log('Failed to clear sensor', e);
+    return res.status(500).json({ error: e && e.message });
+  }
+});
+
+// 返回环境历史数据（用于前端绘图）
+app.get('/api/environment/history', (req, res) => {
+  const hist = db.get('environmentHistory').value() || [];
+  res.json(hist.slice(-200));
+});
+
+// 系统主控信息接口：返回主机 IP、监听端口、操作系统与时区及基本配置
+app.get('/api/system', async (req, res) => {
+  try{
+    const nets = os.networkInterfaces();
+    const ips = [];
+    Object.keys(nets).forEach(ifname => {
+      (nets[ifname] || []).forEach(info => {
+        if (!info.internal && info.family === 'IPv4') ips.push({ iface: ifname, address: info.address });
+      });
+    });
+    const settings = db.get('settings').value() || {};
+    // memory
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const usedMemPercent = Math.round((usedMem / totalMem) * 100);
+
+    // try to get CPU temperature and CPU load via optional dependency 'systeminformation'
+    let cpuTemp = null;
+    let cpuLoadPercent = null;
+    try{
+      const si = require('systeminformation');
+      const ct = await si.cpuTemperature();
+      if (ct && typeof ct.main === 'number') cpuTemp = Number(ct.main.toFixed(1));
+      try{
+        const cl = await si.currentLoad();
+        if (cl && typeof cl.currentload === 'number') cpuLoadPercent = Number(cl.currentload.toFixed(1));
+      }catch(e){}
+    }catch(e){ /* optional package not installed or unsupported platform */ }
+
+    // 如果 systeminformation 未返回 cpuLoadPercent，则使用 os.cpus() 做短时采样作为降级方案
+    if (cpuLoadPercent === null){
+      try{
+        const sampleCpu = () => {
+          const cpus = os.cpus();
+          let user=0, nice=0, sys=0, idle=0, irq=0;
+          cpus.forEach(c=>{
+            user += c.times.user; nice += c.times.nice; sys += c.times.sys; idle += c.times.idle; irq += c.times.irq;
+          });
+          const total = user+nice+sys+idle+irq;
+          return { idle, total };
+        };
+        const a = sampleCpu();
+        await new Promise(r=>setTimeout(r, 200));
+        const b = sampleCpu();
+        const idleDiff = b.idle - a.idle;
+        const totalDiff = b.total - a.total;
+        if (totalDiff > 0){
+          const usage = (1 - idleDiff/totalDiff) * 100;
+          cpuLoadPercent = Number(usage.toFixed(1));
+        }
+      }catch(e){ /* ignore fallback errors */ }
+    }
+
+    const sys = {
+      ips,
+      port: PORT,
+      nodeVersion: process.version,
+      osType: os.type(),
+      platform: os.platform(),
+      release: os.release(),
+      arch: os.arch(),
+      uptimeSec: Math.floor(os.uptime()),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+      memory: { total: totalMem, free: freeMem, used: usedMem, usedPercent: usedMemPercent },
+      cpuTemp,
+      cpuLoadPercent,
+      settings
+    };
+    res.json(sys);
+  }catch(e){ res.status(500).json({ error: e.message || String(e) }); }
 });
 
 // 9. 按需生成报告 (Report Generation)

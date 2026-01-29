@@ -39,18 +39,23 @@ function renderGrid(items, type='cabinet', devices = []){
       const unknown = total - online - offline;
       // build mini rack html: 42 small slots top->bottom, support heightU
       let mini = '<div class="mini-rack">';
-      // map positions for quick lookup (mark ranges for multi-U)
+      // map positions for quick lookup (store device info for titles)
       const occ = {};
       devs.forEach(d=>{
         const pos = Number(d.position);
         const h = d.heightU ? Number(d.heightU) : 1;
         if (pos && pos > 0){
-          for(let k=pos; k<pos+h && k<=42; k++) occ[k] = true;
+          for(let k=pos; k<pos+h && k<=42; k++) occ[k] = { name: d.name, top: (k===pos) };
         }
       });
       for(let u=42; u>=1; u--){
-        const has = !!occ[u];
-        mini += `<span class="mini-slot ${has? 'occupied': 'empty'}" title="U${u}"></span>`;
+        const info = occ[u];
+        if (info){
+          const display = info.top && info.name ? escapeHtml(info.name) : '';
+          mini += `<span class="mini-slot occupied" title="U${u} - ${escapeHtml(info.name)}">${display}</span>`;
+        } else {
+          mini += `<span class="mini-slot empty" title="U${u}"></span>`;
+        }
       }
       mini += '</div>';
       card.innerHTML = `
@@ -60,6 +65,9 @@ function renderGrid(items, type='cabinet', devices = []){
           <div class="viz-row">设备: ${total}</div>
           <div class="viz-row">在线: <span class="badge online">${online}</span> 离线: <span class="badge offline">${offline}</span> 未知: <span class="badge unknown">${unknown}</span></div>
           ${mini}
+          <div class="device-list">
+            ${devs.length ? devs.map(d=>`<div class="tiny">U${d.position || '?'} — ${escapeHtml(d.name)}</div>`).join('') : '<div class="tiny muted">无设备</div>'}
+          </div>
         </div>`;
     } else {
       // device card includes simple online marker if available
@@ -379,11 +387,99 @@ function updateWidgets(){
     if (devCountEl) devCountEl.textContent = s.online;
     if (netSummaryEl) netSummaryEl.textContent = `在线 ${s.online} / 离线 ${s.offline} / 未知 ${s.unknown || 0} / 总计 ${s.totalDevices}`;
   }).catch(()=>{});
+  // fetch environment readings (USB 温湿度传感器 模拟)
+  fetch('/api/environment').then(r=>r.json()).then(e=>{
+    const t = document.getElementById('widget-env-temp');
+    const h = document.getElementById('widget-env-hum');
+    if (t) t.textContent = `${e.temperature} °C`;
+    if (h) h.textContent = `${e.humidity} %`;
+  }).catch(()=>{});
 }
 
 // Periodic refresh
 setInterval(updateWidgets, 30 * 1000);
 updateWidgets();
+
+// Environment chart
+let envChart = null;
+function renderEnvChart(history){
+  const ctx = document.getElementById('env-chart');
+  if (!ctx) return;
+  // build paired data and filter out invalid values
+  const pairs = history.map(h => ({ label: new Date(h.timestamp).toLocaleTimeString(), temp: Number(h.temperature) })).filter(p => !Number.isNaN(p.temp));
+  const labels = pairs.map(p => p.label);
+  const temps = pairs.map(p => p.temp);
+  // compute sensible y-axis padding to avoid runaway auto-scaling
+  const minT = temps.length ? Math.min(...temps) : 0;
+  const maxT = temps.length ? Math.max(...temps) : 50;
+  const pad = Math.max(1, (maxT - minT) * 0.2);
+  const suggestedMin = Math.floor((minT - pad) * 10) / 10;
+  const suggestedMax = Math.ceil((maxT + pad) * 10) / 10;
+  if (!envChart){
+    // ensure canvas has fixed pixel height to avoid layout drift
+    try{ ctx.style.height = '200px'; ctx.height = 200; }catch(e){}
+    envChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '温度 (°C)',
+          data: temps,
+          borderColor: 'rgba(79,70,229,0.9)',
+          backgroundColor: 'rgba(79,70,229,0.12)',
+          fill: true,
+          tension: 0.25
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: false, suggestedMin: suggestedMin, suggestedMax: suggestedMax }
+        }
+      }
+    });
+  } else {
+    // if the existing chart's canvas size changed oddly, destroy and recreate to avoid cumulative layout issues
+    try{
+      const ch = envChart.canvas;
+      if (ch && ch.style && ch.style.height && ch.style.height !== '200px'){
+        envChart.destroy();
+        try{ ctx.style.height = '200px'; ctx.height = 200; }catch(e){}
+        envChart = new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets: [{ label: '温度 (°C)', data: temps, borderColor: 'rgba(79,70,229,0.9)', backgroundColor: 'rgba(79,70,229,0.12)', fill: true, tension: 0.25 }] },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, suggestedMin: suggestedMin, suggestedMax: suggestedMax } } }
+        });
+        return;
+      }
+    }catch(e){}
+
+    envChart.data.labels = labels;
+    envChart.data.datasets[0].data = temps;
+    // update axis suggestions to keep scale stable
+    if (!envChart.options) envChart.options = {};
+    if (!envChart.options.scales) envChart.options.scales = {};
+    envChart.options.scales.y = envChart.options.scales.y || {};
+    envChart.options.scales.y.suggestedMin = suggestedMin;
+    envChart.options.scales.y.suggestedMax = suggestedMax;
+    envChart.update();
+  }
+}
+
+// load environment history and render chart
+function loadEnvHistory(){
+  fetch('/api/environment/history').then(r=>r.json()).then(hist=>{
+    if (!Array.isArray(hist)) return;
+    // keep last 100 entries
+    const h = hist.slice(-100);
+    renderEnvChart(h);
+  }).catch(()=>{});
+}
+
+// refresh chart periodically
+setInterval(loadEnvHistory, 60 * 1000);
+loadEnvHistory();
 
 // SNMP bulk scan
 document.addEventListener('click', e=>{
@@ -407,4 +503,56 @@ document.querySelectorAll('.nav a')[2].textContent = '设备';
 // add network nav item
 const netLink = document.createElement('a'); netLink.textContent = '网络'; document.querySelector('.nav').appendChild(netLink);
 
-setPage('cabinet');
+// 不自动切换到机柜页面，保持仪表盘为默认首页；用户可点击侧栏的“机柜”进入
+// setPage('cabinet');
+
+// sensor selection handler (prompt for serial port path)
+document.addEventListener('click', e => {
+  if (e.target && e.target.id === 'select-sensor-btn'){
+    const val = prompt('请输入 USB 传感器的串口路径，例如 COM3 或 /dev/ttyUSB0');
+    if (!val) return;
+    fetch('/api/select-sensor', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path: val }) }).then(r=>r.json()).then(j=>{
+      if (j && j.ok){ alert('传感器已配置: ' + j.sensor.path); updateWidgets(); }
+      else alert('配置失败: ' + JSON.stringify(j));
+    }).catch(err=>alert('请求失败: '+err.message));
+  }
+  if (e.target && e.target.id === 'unselect-sensor-btn'){
+    if (!confirm('确认要移除已配置的传感器并释放？')) return;
+    fetch('/api/sensor', { method: 'DELETE' }).then(r=>r.json()).then(j=>{
+      if (j && j.ok){ alert('传感器已移除'); const el = document.getElementById('sensor-info'); if (el) el.textContent = '未配置传感器'; updateWidgets(); loadEnvHistory(); loadSystemInfo(); }
+      else alert('移除失败: ' + JSON.stringify(j));
+    }).catch(err=>alert('请求失败: '+err.message));
+  }
+});
+
+// load current sensor info into topbar on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  fetch('/api/sensor').then(r=>r.json()).then(j=>{
+    const el = document.getElementById('sensor-info');
+    if (el){
+      if (j && j.sensor && j.sensor.path) el.textContent = '传感器: ' + j.sensor.path;
+      else el.textContent = '未配置传感器';
+    }
+  }).catch(()=>{});
+  // load system info for dashboard
+  loadSystemInfo();
+});
+
+// fetch and render system info
+function loadSystemInfo(){
+  fetch('/api/system').then(r=>r.json()).then(j=>{
+    const el = document.getElementById('system-info');
+    if (!el) return;
+    if (j && !j.error){
+      const ips = (j.ips || []).map(i=>`${i.iface}: ${i.address}`).join('；') || '未检测到';
+      const port = j.port || '-';
+      const osInfo = `${j.osType || ''} ${j.platform || ''} ${j.release || ''} ${j.arch || ''}`.trim();
+      const tz = j.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '-';
+      const cfg = j.settings ? (`maxPower=${j.settings.maxPower||'-'}, maxTemp=${j.settings.maxTemp||'-'}`) : '';
+      const nodeVer = j.nodeVersion || '-';
+      el.innerHTML = `<div>IP: ${ips}</div><div>监听端口: ${port}</div><div>Node.js: ${escapeHtml(nodeVer)}</div><div>操作系统: ${escapeHtml(osInfo)}</div><div>时区: ${tz}</div><div class="tiny muted">系统配置: ${escapeHtml(cfg)}</div>`;
+    } else {
+      el.textContent = '系统信息加载失败';
+    }
+  }).catch(()=>{ const el = document.getElementById('system-info'); if (el) el.textContent = '系统信息加载失败'; });
+}
