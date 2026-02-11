@@ -7,7 +7,7 @@
 1. 安装依赖
 
 ```powershell
-cd C:\Users\evaha\Desktop\HomeDCIM
+cd 你的安装路径
 npm.cmd install
 ```
 
