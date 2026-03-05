@@ -90,6 +90,28 @@ HomeDCIM 的设计目的是为家庭用户提供一个轻量级的机柜管理�
 
 该项目的目标是提供一个简单易用的工具，帮助用户更好地管理家庭或小型机房的 IT 设备。
 
+修改登录凭据
+ - 默认登录为用户名 `root` 密码 `admin`。
+ - 你可以通过编辑项目根目录下的 `homedcim.json` 添加或修改 `auth` 字段来自定义凭据。例如：
+
+```json
+{
+    "auth": {
+        "username": "admin",
+        "password": "s3cret"
+    }
+}
+```
+
+ - 修改后重启服务 (`npm start`) 即可生效。你也可以通过环境变量覆盖：
+
+PowerShell 示例:
+```powershell
+$env:HCM_USER='admin'; $env:HCM_PASS='s3cret'; npm start
+```
+
+安全提示：将密码保存在明文 JSON 文件中适合本地小规模部署与测试；用于生产环境请使用更安全的凭据管理方式（例如环境变量、加密存储或外部认证代理）。
+
 
 ## 许可证
 

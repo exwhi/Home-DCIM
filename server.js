@@ -28,7 +28,72 @@ try{
 }catch(e){ console.log('DB init log error', e); }
 
 // Serve static frontend
+// Simple front-end authentication middleware
+const fs = require('fs');
+const CONFIG_PATH = path.join(__dirname, 'homedcim.json');
+let configAuth = { username: 'root', password: 'admin' };
+try{
+  if (fs.existsSync(CONFIG_PATH)){
+    const cfgRaw = fs.readFileSync(CONFIG_PATH, 'utf8');
+    const cfg = JSON.parse(cfgRaw || '{}');
+    if (cfg && cfg.auth && cfg.auth.username) configAuth.username = cfg.auth.username;
+    if (cfg && cfg.auth && typeof cfg.auth.password !== 'undefined') configAuth.password = cfg.auth.password;
+  }
+}catch(e){ console.log('Failed to read homedcim.json for auth, using defaults', e); }
+// allow environment override
+const DEFAULT_USER = process.env.HCM_USER || configAuth.username || 'root';
+const DEFAULT_PASS = process.env.HCM_PASS || configAuth.password || 'admin';
+const AUTH_TOKEN = Buffer.from(`${DEFAULT_USER}:${DEFAULT_PASS}`).toString('base64');
+
+function parseCookies(req){
+  const header = req.headers.cookie || '';
+  return header.split(';').map(s=>s.trim()).filter(Boolean).reduce((acc,c)=>{ const idx = c.indexOf('='); if (idx>0){ const k = c.slice(0,idx); const v = c.slice(idx+1); acc[k]=v; } return acc; }, {});
+}
+
+app.use((req, res, next) => {
+  // allow login endpoints and API login
+  if (req.path === '/login' || req.path === '/api/login' || req.path === '/logout') return next();
+  console.log('Auth middleware cookies=', req.headers.cookie);
+  // accept basic auth header
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Basic ')){
+    const token = authHeader.slice(6).trim();
+    if (token === AUTH_TOKEN) return next();
+  }
+  // check cookie
+  const cookies = parseCookies(req);
+  if (cookies && cookies.hcm_auth === AUTH_TOKEN) return next();
+  // if requesting HTML, send login page
+  const accept = req.headers.accept || '';
+  if (req.method === 'GET' && accept.includes('text/html')){
+    return res.sendFile(path.join(__dirname, 'public', 'login.html'));
+  }
+  // otherwise respond 401
+  res.status(401).json({ error: 'Unauthorized' });
+});
+
+// Serve static frontend
 app.use('/', express.static(path.join(__dirname, 'public')));
+
+// login endpoint
+app.post('/api/login', (req, res) => {
+  const body = req.body || {};
+  console.log('Login attempt body=', body);
+  const { username, password } = body;
+  if (String(username) === String(DEFAULT_USER) && String(password) === String(DEFAULT_PASS)){
+    // set cookie (not httpOnly for debug; can be switched back to httpOnly:true)
+    res.cookie('hcm_auth', AUTH_TOKEN, { httpOnly: false, sameSite: 'lax', path: '/' });
+    console.log(`Login success for user=${username}`);
+    return res.json({ ok: true, token: AUTH_TOKEN });
+  }
+  console.log(`Login failed for user=${username}`);
+  res.status(401).json({ error: 'Invalid credentials' });
+});
+
+app.get('/logout', (req, res) => {
+  res.clearCookie('hcm_auth', { path: '/' });
+  res.redirect('/login');
+});
 
 // API endpoints
 // Using lowdb v1 (synchronous FileSync adapter)

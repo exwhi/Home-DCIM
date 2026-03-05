@@ -1,4 +1,8 @@
 {
+  "auth": {
+    "username": "root",
+    "password": "admin"
+  },
   "cabinets": [
     {
       "id": 1,
@@ -49,85 +53,6 @@
       "heightU": 3,
       "online": false,
       "lastChecked": "2026-01-29T13:57:47.058Z"
-    }
-  ],
-  "deviceLastId": 3,
-  "devicesLastId": 0,
-  "audits": [
-    {
-      "id": 1761572088364,
-      "action": "ssh.connect.attempt",
-      "details": {
-        "host": "103.186.214.101",
-        "port": 22,
-        "username": "root"
-      },
-      "user": "system",
-      "timestamp": "2025-10-27T13:34:48.364Z"
-    },
-    {
-      "id": 1764809735525,
-      "timestamp": "2025-12-04T00:55:35.525Z",
-      "action": "ssh.connect.attempt",
-      "details": {
-        "host": "103.186.214.101",
-        "port": 22,
-        "username": "root"
-      },
-      "user": "unknown"
-    },
-    {
-      "id": 1764810242586,
-      "timestamp": "2025-12-04T01:04:02.586Z",
-      "action": "ssh.connect.attempt",
-      "details": {
-        "host": "103.186.214.101",
-        "port": 22,
-        "username": "root"
-      },
-      "user": "unknown"
-    },
-    {
-      "id": 1764810708826,
-      "timestamp": "2025-12-04T01:11:48.826Z",
-      "action": "websockify.start",
-      "details": {
-        "wsPort": 6080,
-        "targetHost": "127.0.0.1",
-        "targetPort": 5900
-      },
-      "user": "unknown"
-    },
-    {
-      "id": 1769525220722,
-      "timestamp": "2026-01-27T14:47:00.722Z",
-      "action": "ssh.connect.attempt",
-      "details": {
-        "host": "38.76.196.21",
-        "port": 22,
-        "username": "root"
-      },
-      "user": "unknown"
-    },
-    {
-      "id": 1769526220683,
-      "timestamp": "2026-01-27T15:03:40.683Z",
-      "action": "websockify.start",
-      "details": {
-        "wsPort": 6080,
-        "targetHost": "127.0.0.1",
-        "targetPort": 5900
-      },
-      "user": "unknown"
-    },
-    {
-      "id": 1769697304818,
-      "timestamp": "2026-01-29T14:35:04.818Z",
-      "action": "sensor.unselect",
-      "details": {
-        "by": "web"
-      },
-      "user": "unknown"
     }
   ],
   "alerts": [],
