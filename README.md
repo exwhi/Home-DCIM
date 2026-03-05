@@ -23,7 +23,7 @@ npm start
 
 注意
 - 数据默认保存在项目根目录的 `hcm.json`（lowdb）。
-- 本仓库初始使用 lowdb 以避免在没有 Windows C++ 构建工具的环境下编译 sqlite3。若你需要切回 SQLite，请让我帮你执行迁移步骤（安装 Visual Studio Build Tools 并切换依赖）。
+- 本仓库初始使用 lowdb 以避免在没有 Windows C++ 构建工具的环境下编译 sqlite3。若你需要切回 SQLite，请执行迁移步骤（安装 Visual Studio Build Tools 并切换依赖）。
 
 API 接口
 
