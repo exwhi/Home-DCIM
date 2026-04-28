@@ -12,7 +12,7 @@ on:
       - main
 
 env:
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/<home-dcim-docker>
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/home-dcim-docker
 
 jobs:
   build-and-push:
