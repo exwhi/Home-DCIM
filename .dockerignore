@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+.env
+*.log
+.git
+.github
+public/login.html
+tmp
+dist
