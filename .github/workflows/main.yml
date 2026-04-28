@@ -44,11 +44,7 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref, '-beta') }}
-            type=semver,pattern={{major}},enable=${{ !contains(github.ref, '-beta') }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ !contains(github.ref, '-beta') }}
             type=raw,value=beta,enable=${{ contains(github.ref, '-beta') }}
 
       # ── 4. 设置 Docker Buildx ────────────────────────────────────
